@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ko">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학생 뽑기 - 교사용</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+  <style>
+        body { font-family: 'Gowun Dodum', sans-serif; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
+        .view { display: none; }
+        .view.active { display: block; }
+        /* Canva 에디터가 런타임에 주입하던 스타일을 고정값으로 대체 */
+        .canva-text { color: #6b7280; }
+        h1.canva-text { color: #14532d; font-size: 1.875rem; line-height: 2.25rem; }
+        h2.canva-text { color: #14532d; font-size: 1.25rem; line-height: 1.75rem; }
+        h2.canva-text.text-red-600 { color: #dc2626; }
+        p.canva-text { font-size: 1rem; }
+        p.canva-text.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        p.canva-text.text-green-700 { color: #15803d; }
+        .canva-button { background: #22c55e; color: #fff; transition: background .15s; }
+        .canva-button:hover:not(:disabled) { background: #16a34a; }
+        .canva-button:disabled { opacity: .6; cursor: not-allowed; }
+        #slot-display {
+            height: 80px;
+            overflow: hidden;
+            position: relative;
+            background: #f0fdf4;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .slot-text { font-size: 1.5rem; font-weight: 700; min-height: 4rem; display: flex; align-items: center; justify-content: center; }
+        @keyframes pulse-btn { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.05); } }
+        .draw-pulse { animation: pulse-btn 1.5s infinite; }
+        #confetti-canvas { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999; }
+    </style>
+ </head>
+ <body data-template-id="__page-root" class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md"><div id="view-locked" class="view bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="locked-title" class="canva-text text-center font-bold mb-2">교사용 페이지</h1>
+    <p data-template-id="locked-desc" class="canva-text text-center mb-6">보안 코드를 입력하세요.</p>
+    <button data-template-id="locked-btn" id="locked-btn" type="button" class="canva-button w-full py-3 rounded-lg font-semibold">코드 입력</button>
+   </div>
+   <!-- Setup -->
+   <div id="view-setup" class="view bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="setup-title" class="canva-text text-center font-bold mb-2">뽑기 설정</h1>
+    <p data-template-id="setup-subtitle" class="canva-text text-center mb-6">뽑기 정보를 입력하세요.</p>
+    <form id="setup-form" class="space-y-4">
+     <div><label for="lottery-title" class="block text-sm font-medium text-gray-700 mb-1">뽑기 제목</label> <input id="lottery-title" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none" placeholder="예: 자리 뽑기">
+     </div>
+     <div><label for="student-list" class="block text-sm font-medium text-gray-700 mb-1">학생 목록 (한 줄에 "학번 이름")</label> <textarea id="student-list" rows="5" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none text-sm" placeholder="20401 홍길동
+20402 김철수"></textarea>
+     </div>
+     <div><label for="item-list" class="block text-sm font-medium text-gray-700 mb-1">뽑기 항목 (한 줄에 하나, 수량 입력 가능)</label> <textarea id="item-list" rows="5" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none text-sm" placeholder="1번 자리 x3
+2번 자리"></textarea>
+     </div>
+     <div><label for="result-message" class="block text-sm font-medium text-gray-700 mb-1">결과 페이지 문구</label> <input id="result-message" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none" placeholder="축하합니다! 🎉">
+     </div><button data-template-id="setup-btn" type="submit" class="canva-button w-full py-3 rounded-lg font-semibold">설정 완료</button>
+    </form>
+   </div>
+   <div id="view-done" class="view bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="done-title" class="canva-text text-center font-bold mb-2">저장 완료</h1>
+    <p data-template-id="done-desc" class="canva-text text-center mb-6">뽑기 설정이 저장되었습니다.</p>
+    <a href="index.html" data-template-id="done-link" class="canva-button block w-full py-3 rounded-lg font-semibold text-center">학생 화면 열기</a>
+   </div>
+  </div><!-- Modal -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+   <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+    <h2 data-template-id="modal-title" class="canva-text font-bold text-center mb-2">알림</h2>
+    <p data-template-id="modal-msg" id="modal-msg-el" class="canva-text text-center mb-6"></p>
+    <div id="modal-buttons" class="flex flex-col gap-2"><button data-template-id="modal-close-btn" id="modal-close" type="button" class="canva-button w-full py-2 rounded-lg font-semibold">확인</button> <button id="modal-secondary" type="button" class="hidden w-full py-2 rounded-lg font-semibold bg-green-100 text-green-700">결과 확인하기</button>
+    </div>
+   </div>
+  </div><!-- Security Code Modal -->
+  <div id="security-modal-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+   <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+    <h2 data-template-id="security-modal-title" class="canva-text font-bold text-center mb-4">보안 코드 입력</h2>
+    <div class="mb-4"><input id="security-code-input" type="text" inputmode="numeric" class="w-full border border-gray-300 rounded-lg px-3 py-3 text-center text-2xl tracking-widest focus:ring-2 focus:ring-green-400 outline-none" placeholder="0000">
+    </div>
+    <p id="security-error" class="text-red-500 text-sm text-center mb-4 hidden"></p>
+    <div class="flex gap-2"><button data-template-id="security-cancel-btn" id="security-cancel-btn" type="button" class="flex-1 py-2 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300">취소</button> <button data-template-id="security-confirm-btn" id="security-confirm-btn" type="button" class="canva-button flex-1 py-2 rounded-lg font-semibold">확인</button>
+    </div>
+   </div>
+  </div><!-- Reset Confirmation Modal -->
+  <div id="reset-confirm-modal-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+   <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+    <h2 data-template-id="reset-confirm-title" class="canva-text font-bold text-center mb-4 text-red-600">설정 수정</h2>
+    <p data-template-id="reset-confirm-msg" class="canva-text text-center mb-6">설정을 수정하면 기존의 뽑기 결과가 초기화되며<br>
+      더 이상 결과를 확인할 수 없습니다.<br>
+      계속하시겠습니까?</p>
+    <div class="flex gap-2"><button data-template-id="reset-confirm-no" id="reset-confirm-no" type="button" class="flex-1 py-2 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300">아니오</button> <button data-template-id="reset-confirm-yes" id="reset-confirm-yes" type="button" class="flex-1 py-2 rounded-lg font-semibold bg-red-500 text-white hover:bg-red-600">예</button>
+    </div>
+   </div>
+  </div>
+  <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbw6PHa1VEll1ZSz9TQzufYEtcmYBtLaRyGr85AnGPTgo-3nmB-0ysM67xmE--Tch1R0Ew/exec';
+
+        // ---- 서버 통신 (Google Apps Script) ----
+        async function api(payload) {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // preflight 회피
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        }
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function showView(id) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + id).classList.add('active');
+        }
+
+        function activeViewId() {
+            const v = document.querySelector('.view.active');
+            return v ? v.id : null;
+        }
+
+        function showModal(msg, secondaryAction) {
+            document.getElementById('modal-msg-el').textContent = msg;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            const sec = document.getElementById('modal-secondary');
+            if (secondaryAction) {
+                sec.classList.remove('hidden');
+                sec.onclick = () => { hideModal(); secondaryAction(); };
+            } else {
+                sec.classList.add('hidden');
+            }
+        }
+
+        function hideModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        document.getElementById('modal-close').addEventListener('click', hideModal);
+
+        let isEditMode = false;
+        let teacherCode = null;        // 보안 코드 확인에 성공한 값 (메모리에만 보관)
+        let pendingSettings = null;    // 설정 수정 화면에 채울 현재 설정
+
+        // Parse item with quantity: "항목" or "항목 x수" or "항목 X수"
+        function parseItemLine(line) {
+            const trimmed = line.trim();
+            const match = trimmed.match(/^(.+?)\s+[xX](\d+)$/);
+            if (match) {
+                return { name: match[1].trim(), quantity: parseInt(match[2], 10) };
+            }
+            return { name: trimmed, quantity: 1 };
+        }
+
+        function openSecurityModal() {
+            document.getElementById('security-code-input').value = '';
+            document.getElementById('security-error').classList.add('hidden');
+            document.getElementById('security-modal-overlay').classList.remove('hidden');
+            document.getElementById('security-code-input').focus();
+        }
+
+        async function init() {
+            try {
+                const cfg = await api({ action: 'config' });
+                if (!cfg.ok) throw new Error('config failed');
+                if (!cfg.exists) { showView('setup'); return; }   // 최초 설정은 보안 코드 없이
+                showView('locked');
+                openSecurityModal();
+            } catch (err) {
+                console.error(err);
+                showView('locked');
+                showModal('오류가 발생했습니다.');
+            }
+        }
+        init();
+
+        document.getElementById('locked-btn').addEventListener('click', openSecurityModal);
+
+        // ---- Setup form ----
+        document.getElementById('setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('lottery-title').value.trim();
+            const studentLines = document.getElementById('student-list').value.trim().split('\n').filter(l => l.trim());
+            const itemLines = document.getElementById('item-list').value.trim().split('\n').filter(l => l.trim());
+            const resultMessage = document.getElementById('result-message').value.trim() || '축하합니다! 🎉';
+
+            // Parse items with quantities
+            const items = itemLines.map(line => parseItemLine(line));
+            const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+            // Validation
+            if (!title) { showModal('사전 입력 데이터를 확인하세요.'); return; }
+            for (const line of studentLines) {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length < 2) { showModal('사전 입력 데이터를 확인하세요.'); return; }
+            }
+            if (studentLines.length !== totalQuantity) { showModal('사전 입력 데이터를 확인하세요.'); return; }
+            if (studentLines.length === 0) { showModal('사전 입력 데이터를 확인하세요.'); return; }
+
+            // Save (서버가 기존 데이터를 한 번에 교체)
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '저장 중...';
+
+            let res = null;
+            try {
+                res = await api({
+                    action: 'setup',
+                    code: isEditMode ? teacherCode : '',
+                    title,
+                    students: studentLines,
+                    items: itemLines,
+                    resultMessage
+                });
+            } catch (err) {
+                console.error(err);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '설정 완료';
+            if (!res || !res.ok) {
+                if (res && res.error === 'bad_input') showModal('사전 입력 데이터를 확인하세요.');
+                else if (res && (res.error === 'invalid' || res.error === 'locked' || res.error === 'not_configured')) showModal('보안 코드가 올바르지 않습니다.');
+                else showModal('오류가 발생했습니다.');
+                return;
+            }
+            isEditMode = false;
+            teacherCode = null;
+            pendingSettings = null;
+            showView('done');
+        });
+
+        // ---- Security modal (코드는 서버 스크립트 속성에서 검증) ----
+        document.getElementById('security-cancel-btn').addEventListener('click', () => {
+            document.getElementById('security-modal-overlay').classList.add('hidden');
+            showView('locked');
+        });
+
+        document.getElementById('security-confirm-btn').addEventListener('click', async () => {
+            const code = document.getElementById('security-code-input').value.trim();
+            const errorEl = document.getElementById('security-error');
+            const btn = document.getElementById('security-confirm-btn');
+            btn.disabled = true;
+            btn.textContent = '확인 중...';
+
+            let res = null;
+            try {
+                res = await api({ action: 'getSettings', code });
+            } catch (err) {
+                console.error(err);
+            }
+            btn.disabled = false;
+            btn.textContent = '확인';
+
+            if (res && res.ok) {
+                teacherCode = code;
+                pendingSettings = res;
+                document.getElementById('security-modal-overlay').classList.add('hidden');
+                document.getElementById('reset-confirm-modal-overlay').classList.remove('hidden');
+                return;
+            }
+            const msgs = {
+                invalid: '보안 코드가 올바르지 않습니다.',
+                locked: '시도 횟수를 초과했습니다. 30초 후 다시 시도하세요.',
+                not_configured: '서버에 보안 코드가 설정되지 않았습니다.'
+            };
+            errorEl.textContent = (res && msgs[res.error]) || '오류가 발생했습니다.';
+            errorEl.classList.remove('hidden');
+        });
+
+        // ---- Reset confirmation modal ----
+        document.getElementById('reset-confirm-no').addEventListener('click', () => {
+            document.getElementById('reset-confirm-modal-overlay').classList.add('hidden');
+            teacherCode = null;
+            pendingSettings = null;
+            showView('locked');
+        });
+
+        document.getElementById('reset-confirm-yes').addEventListener('click', () => {
+            document.getElementById('reset-confirm-modal-overlay').classList.add('hidden');
+            isEditMode = true;
+            const s = pendingSettings || { lottery_title: '', result_message: '', students: [], items: [] };
+            document.getElementById('lottery-title').value = s.lottery_title || '';
+            document.getElementById('result-message').value = s.result_message || '';
+            document.getElementById('student-list').value = s.students.join('\n');
+            document.getElementById('item-list').value = s.items.join('\n');
+            showView('setup');
+        });
+
+        // Security code input - 숫자만 허용 (4자리 이상 자유)
+        document.getElementById('security-code-input').addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+    </script>
+ </body>
+</html>

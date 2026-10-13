@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ko">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학생 뽑기</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
+  <style>
+        body { font-family: 'Gowun Dodum', sans-serif; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
+        .view { display: none; }
+        .view.active { display: block; }
+        /* Canva 에디터가 런타임에 주입하던 스타일을 고정값으로 대체 */
+        .canva-text { color: #6b7280; }
+        h1.canva-text { color: #14532d; font-size: 1.875rem; line-height: 2.25rem; }
+        h2.canva-text { color: #14532d; font-size: 1.25rem; line-height: 1.75rem; }
+        h2.canva-text.text-red-600 { color: #dc2626; }
+        p.canva-text { font-size: 1rem; }
+        p.canva-text.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        p.canva-text.text-green-700 { color: #15803d; }
+        .canva-button { background: #22c55e; color: #fff; transition: background .15s; }
+        .canva-button:hover:not(:disabled) { background: #16a34a; }
+        .canva-button:disabled { opacity: .6; cursor: not-allowed; }
+        #slot-display {
+            height: 80px;
+            overflow: hidden;
+            position: relative;
+            background: #f0fdf4;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .slot-text { font-size: 1.5rem; font-weight: 700; min-height: 4rem; display: flex; align-items: center; justify-content: center; }
+        @keyframes pulse-btn { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.05); } }
+        .draw-pulse { animation: pulse-btn 1.5s infinite; }
+        #confetti-canvas { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999; }
+    </style>
+ </head>
+ <body data-template-id="__page-root" class="min-h-screen flex items-center justify-center p-4">
+  <canvas id="confetti-canvas"></canvas>
+  <div class="w-full max-w-md"><div id="view-notready" class="view bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="notready-title" class="canva-text text-center font-bold mb-2">뽑기 준비 중</h1>
+    <p data-template-id="notready-desc" class="canva-text text-center">아직 뽑기가 준비되지 않았습니다.<br>선생님이 설정을 마치면 접속할 수 있습니다.</p>
+   </div><!-- View 2: Login -->
+   <div id="view-login" class="view bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="login-title" class="canva-text text-center font-bold mb-2">뽑기</h1>
+    <p data-template-id="login-desc" class="canva-text text-center mb-6">학번과 이름을 입력하여 접속하세요.</p>
+    <form id="login-form" class="space-y-4">
+     <div><label for="input-id" class="block text-sm font-medium text-gray-700 mb-1">학번</label> <input id="input-id" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none">
+     </div>
+     <div><label for="input-name" class="block text-sm font-medium text-gray-700 mb-1">이름</label> <input id="input-name" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-400 outline-none">
+     </div><button data-template-id="login-btn" type="submit" class="canva-button w-full py-3 rounded-lg font-semibold">접속하기</button>
+    </form>
+   </div><!-- View 3: Draw -->
+   <div id="view-draw" class="view bg-white rounded-2xl shadow-xl p-6 text-center">
+    <h1 data-template-id="draw-header" class="canva-text font-bold mb-4">뽑기 시작!</h1>
+    <p data-template-id="draw-order-text" class="canva-text mb-8"></p>
+    <div id="slot-display" class="slot-text text-green-600 mb-8">
+     ?
+    </div><button data-template-id="draw-btn" id="draw-btn" type="button" class="canva-button draw-pulse w-48 h-48 rounded-full text-2xl font-bold mx-auto flex items-center justify-center gap-2">뽑기</button>
+   </div><!-- View 4: Result -->
+   <div id="view-result" class="view bg-white rounded-2xl shadow-xl p-6 text-center">
+    <h1 data-template-id="result-header" class="canva-text font-bold mb-2">뽑기 결과</h1>
+    <p data-template-id="result-order" class="canva-text mb-6"></p>
+    <div id="result-display" class="text-4xl font-bold text-green-600 my-8 p-6 bg-green-50 rounded-xl"></div>
+    <p data-template-id="result-congrats" class="canva-text text-2xl font-bold mb-6 text-green-700"></p><button data-template-id="result-home-btn" id="result-home-btn" type="button" class="canva-button w-full py-3 rounded-lg font-semibold">처음으로</button>
+   </div>
+  </div><!-- Modal -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+   <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+    <h2 data-template-id="modal-title" class="canva-text font-bold text-center mb-2">알림</h2>
+    <p data-template-id="modal-msg" id="modal-msg-el" class="canva-text text-center mb-6"></p>
+    <div id="modal-buttons" class="flex flex-col gap-2"><button data-template-id="modal-close-btn" id="modal-close" type="button" class="canva-button w-full py-2 rounded-lg font-semibold">확인</button> <button id="modal-secondary" type="button" class="hidden w-full py-2 rounded-lg font-semibold bg-green-100 text-green-700">결과 확인하기</button>
+    </div>
+   </div>
+  </div>
+  <script>
+        const API_URL = 'https://script.google.com/macros/s/AKfycbw6PHa1VEll1ZSz9TQzufYEtcmYBtLaRyGr85AnGPTgo-3nmB-0ysM67xmE--Tch1R0Ew/exec';
+
+        // ---- 서버 통신 (Google Apps Script) ----
+        async function api(payload) {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // preflight 회피
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        }
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function showView(id) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + id).classList.add('active');
+        }
+
+        function activeViewId() {
+            const v = document.querySelector('.view.active');
+            return v ? v.id : null;
+        }
+
+        function showModal(msg, secondaryAction) {
+            document.getElementById('modal-msg-el').textContent = msg;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            const sec = document.getElementById('modal-secondary');
+            if (secondaryAction) {
+                sec.classList.remove('hidden');
+                sec.onclick = () => { hideModal(); secondaryAction(); };
+            } else {
+                sec.classList.add('hidden');
+            }
+        }
+
+        function hideModal() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        document.getElementById('modal-close').addEventListener('click', hideModal);
+
+        const POLL_INTERVAL_MS = 10000;
+
+        let currentStudent = null;     // { student_id, student_name, drawn, draw_order, draw_result }
+        let configInfo = null;         // { exists, lottery_title, draw_result }
+        let isDrawing = false;
+        let userInteracted = false;
+
+        // ---- 설정(제목) 동기화: 최초 1회 + 대기/로그인 화면에서 주기적으로 ----
+        function applyConfig(cfg) {
+            configInfo = cfg;
+            const active = activeViewId();
+            if (!cfg.exists) {
+                if (active === null) showView('notready');
+                return;
+            }
+            const titleEl = document.querySelector('[data-template-id="login-title"]');
+            if (titleEl) titleEl.textContent = cfg.lottery_title || '뽑기';
+            if (!userInteracted && (active === null || active === 'view-notready')) showView('login');
+        }
+
+        async function refreshConfig() {
+            try {
+                const cfg = await api({ action: 'config' });
+                if (!cfg.ok) throw new Error('config failed');
+                applyConfig(cfg);
+            } catch (err) {
+                console.error(err);
+                if (activeViewId() === null) showModal('오류가 발생했습니다.');
+            }
+        }
+
+        refreshConfig();
+        setInterval(() => {
+            const active = activeViewId();
+            if (document.hidden || userInteracted) return;
+            if (active === null || active === 'view-notready' || active === 'view-login') refreshConfig();
+        }, POLL_INTERVAL_MS);
+
+        // ---- Login form ----
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            userInteracted = true;
+            const id = document.getElementById('input-id').value.trim();
+            const name = document.getElementById('input-name').value.trim();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = '확인 중...';
+
+            let res = null;
+            try {
+                res = await api({ action: 'login', id, name });
+            } catch (err) {
+                console.error(err);
+            }
+            btn.disabled = false;
+            btn.textContent = '접속하기';
+
+            if (!res || (!res.ok && res.error !== 'not_found')) { showModal('오류가 발생했습니다.'); return; }
+            if (!res.ok) { showModal('등록되지 않은 학생입니다.'); return; }
+
+            currentStudent = { student_id: id, student_name: name, drawn: res.drawn, draw_order: res.draw_order, draw_result: res.draw_result };
+            if (res.drawn) {
+                showModal('이미 참여하였습니다.', () => showResult(currentStudent));
+                return;
+            }
+            document.querySelector('[data-template-id="draw-order-text"]').textContent = `당신은 이번 뽑기의 ${res.drawnCount + 1}번째 참여자입니다.`;
+            document.getElementById('slot-display').textContent = '?';
+            showView('draw');
+        });
+
+        // ---- Draw ----
+        document.getElementById('draw-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('draw-btn');
+            btn.disabled = true; btn.classList.remove('draw-pulse');
+            isDrawing = true;
+            userInteracted = true;
+
+            const slot = document.getElementById('slot-display');
+
+            // 서버 추첨은 애니메이션과 동시에 진행 (결과는 서버가 잠금 상태에서 확정)
+            const drawPromise = api({ action: 'draw', id: currentStudent.student_id, name: currentStudent.student_name })
+                .catch(err => { console.error(err); return null; });
+
+            // Dot loading animation
+            const dots = ['.',  '..',  '...',  '....',  '.....'];
+            let dotIndex = 0;
+            const dotInterval = setInterval(() => {
+                slot.textContent = dots[dotIndex];
+                dotIndex = (dotIndex + 1) % dots.length;
+            }, 200);
+
+            // Run for ~3 seconds
+            await sleep(3000);
+            clearInterval(dotInterval);
+            const res = await drawPromise;
+
+            if (!res || !res.ok) {
+                slot.textContent = '?';
+                btn.disabled = false; btn.classList.add('draw-pulse');
+                isDrawing = false;
+                showModal(res && res.error === 'no_items' ? '남은 항목이 없습니다.' : '오류가 발생했습니다.');
+                return;
+            }
+
+            currentStudent = { ...currentStudent, drawn: true, draw_order: res.draw_order, draw_result: res.draw_result };
+            showResult(currentStudent);
+        });
+
+        function showResult(student) {
+            document.querySelector('[data-template-id="result-order"]').textContent = `${student.draw_order}번째 참여자`;
+            document.getElementById('result-display').textContent = student.draw_result;
+            const resultMsg = configInfo && configInfo.draw_result ? configInfo.draw_result : '축하합니다! 🎉';
+            document.querySelector('[data-template-id="result-congrats"]').textContent = resultMsg;
+            showView('result');
+            fireConfetti();
+            // Keep isDrawing true while result is displayed
+        }
+
+        // Home button on result page
+        document.getElementById('result-home-btn').addEventListener('click', () => {
+            currentStudent = null;
+            document.getElementById('input-id').value = '';
+            document.getElementById('input-name').value = '';
+            // Reset draw button for next student
+            const drawBtn = document.getElementById('draw-btn');
+            drawBtn.disabled = false;
+            drawBtn.classList.add('draw-pulse');
+            isDrawing = false;
+            userInteracted = false;
+            showView('login');
+        });
+
+        // Confetti
+        function fireConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const particles = Array.from({ length: 120 }, () => ({
+                x: Math.random() * canvas.width, y: Math.random() * -canvas.height,
+                w: Math.random() * 10 + 5, h: Math.random() * 6 + 3,
+                color: ['#22c55e','#16a34a','#10b981','#f59e0b','#ec4899','#8b5cf6'][Math.floor(Math.random()*6)],
+                vy: Math.random() * 3 + 2, vx: (Math.random() - 0.5) * 4, rot: Math.random() * 360
+            }));
+            let frame = 0;
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => {
+                    p.y += p.vy; p.x += p.vx; p.rot += 3;
+                    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot * Math.PI / 180);
+                    ctx.fillStyle = p.color; ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+                    ctx.restore();
+                });
+                frame++;
+                if (frame < 90) requestAnimationFrame(draw);
+                else ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            draw();
+        }
+    </script>
+ </body>
+</html>
