@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>학생 뽑기</title>
-  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&amp;display=swap" rel="stylesheet">
   <style>
         body { font-family: 'Gowun Dodum', sans-serif; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); }
@@ -36,10 +37,14 @@
         .draw-pulse { animation: pulse-btn 1.5s infinite; }
         #confetti-canvas { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999; }
     </style>
+  <link rel="stylesheet" href="tailwind.css">
  </head>
  <body data-template-id="__page-root" class="min-h-screen flex items-center justify-center p-4">
   <canvas id="confetti-canvas"></canvas>
-  <div class="w-full max-w-md"><div id="view-notready" class="view bg-white rounded-2xl shadow-xl p-6">
+  <div class="w-full max-w-md"><div id="view-loading" class="view active bg-white rounded-2xl shadow-xl p-6">
+    <h1 data-template-id="loading-title" class="canva-text text-center font-bold mb-2">불러오는 중...</h1>
+    <p data-template-id="loading-desc" class="canva-text text-center">잠시만 기다려 주세요.</p>
+   </div><div id="view-notready" class="view bg-white rounded-2xl shadow-xl p-6">
     <h1 data-template-id="notready-title" class="canva-text text-center font-bold mb-2">뽑기 준비 중</h1>
     <p data-template-id="notready-desc" class="canva-text text-center">아직 뽑기가 준비되지 않았습니다.<br>선생님이 설정을 마치면 접속할 수 있습니다.</p>
    </div><!-- View 2: Login -->
@@ -126,35 +131,60 @@
         let isDrawing = false;
         let userInteracted = false;
 
-        // ---- 설정(제목) 동기화: 최초 1회 + 대기/로그인 화면에서 주기적으로 ----
+        // ---- 설정(제목) 동기화 ----
+        // 마지막으로 받은 설정을 브라우저에 저장해 두었다가, 다음 접속 때 서버 응답 전에 먼저 보여 줌
+        const CACHE_KEY = 'drawer_config_v1';
+        let loadFailedShown = false;
+
+        function loadCachedConfig() {
+            try {
+                const v = JSON.parse(localStorage.getItem(CACHE_KEY));
+                return v && v.exists ? v : null;
+            } catch (err) { return null; }
+        }
+
+        function saveCachedConfig(cfg) {
+            try {
+                if (cfg.exists) localStorage.setItem(CACHE_KEY, JSON.stringify(cfg));
+                else localStorage.removeItem(CACHE_KEY);
+            } catch (err) { /* 저장 불가 환경이면 무시 */ }
+        }
+
         function applyConfig(cfg) {
             configInfo = cfg;
             const active = activeViewId();
+            const waiting = active === null || active === 'view-loading' || active === 'view-notready';
             if (!cfg.exists) {
-                if (active === null) showView('notready');
+                if (!userInteracted && (waiting || active === 'view-login')) showView('notready');
                 return;
             }
             const titleEl = document.querySelector('[data-template-id="login-title"]');
             if (titleEl) titleEl.textContent = cfg.lottery_title || '뽑기';
-            if (!userInteracted && (active === null || active === 'view-notready')) showView('login');
+            if (!userInteracted && waiting) showView('login');
         }
 
         async function refreshConfig() {
             try {
                 const cfg = await api({ action: 'config' });
                 if (!cfg.ok) throw new Error('config failed');
+                saveCachedConfig(cfg);
                 applyConfig(cfg);
             } catch (err) {
                 console.error(err);
-                if (activeViewId() === null) showModal('오류가 발생했습니다.');
+                if (activeViewId() === 'view-loading' && !loadFailedShown) {
+                    loadFailedShown = true;
+                    showModal('오류가 발생했습니다.');
+                }
             }
         }
 
+        const cachedConfig = loadCachedConfig();
+        if (cachedConfig) applyConfig(cachedConfig);
         refreshConfig();
         setInterval(() => {
             const active = activeViewId();
             if (document.hidden || userInteracted) return;
-            if (active === null || active === 'view-notready' || active === 'view-login') refreshConfig();
+            if (active === null || active === 'view-loading' || active === 'view-notready' || active === 'view-login') refreshConfig();
         }, POLL_INTERVAL_MS);
 
         // ---- Login form ----
